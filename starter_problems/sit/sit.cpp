@@ -1,8 +1,8 @@
 #include <fstream>
 #include <vector>
 
-#define IN "{project}in.txt"
-#define OUT "{project}out.txt"
+#define IN "sitin.txt"
+#define OUT "sitout.txt"
 
 using u8 = unsigned char;
 using u16 = unsigned short;
@@ -17,20 +17,19 @@ using i64 = signed long long;
 using f32 = float;
 using f64 = double;
 
-using namespace std;
-
 template <typename T>
-using vec = vector<T>;
+using vec = std::vector<T>;
 
 int main()
 {
-    ifstream in(IN);
-    ofstream out(OUT);
+    std::ifstream in(IN);
+    std::ofstream out(OUT);
 
-    i64 a, b;
-    in >> a >> b;
-
-    out << a + b;
+    u64 r, w, p;
+    in >> r >> w >> p;
+    u64 sitting = std::min(r * w, p);
+    u64 standing = std::max(p - sitting, 0ull);
+    out << sitting << " " << standing;
 
     return 0;
 }
