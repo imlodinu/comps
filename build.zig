@@ -75,9 +75,6 @@ fn copyRecursiveDir(project: []const u8, src_dir: std.fs.IterableDir, dest_dir: 
                                 else => return err,
                             }
                         };
-                        if (buf.len == 0) {
-                            break;
-                        }
                         // replace {project} with the project name
                         var line = try std.mem.replaceOwned(u8, allocator, buf, "{project}", project);
                         try out.writeAll(line);
