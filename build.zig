@@ -2,6 +2,7 @@ const std = @import("std");
 
 var stored_b: *std.Build = undefined;
 var allocator: std.mem.Allocator = undefined;
+var project_res: *ProjectSet = undefined;
 
 pub fn build(b: *std.Build) !void {
     stored_b = b;
@@ -20,9 +21,28 @@ pub fn build(b: *std.Build) !void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     // const optimize = b.standardOptimizeOption(.{});
 
+    var made_project_res = try getSetFromArgs();
+    project_res = try allocator.create(ProjectSet);
+    project_res.* = made_project_res;
+
     const generate_step = b.step("generate", "generates a project");
     generate_step.makeFn = generateProject;
-    b.default_step = generate_step;
+
+    const build_step = b.step("build", "builds a project");
+
+    var exe = buildProject();
+    build_step.dependOn(&stored_b.addInstallArtifact(exe, .{
+        .dest_dir = .{
+            .override = .{
+                .custom = project_res.exe_file_path,
+            },
+        },
+    }).step);
+
+    const run_step = b.step("run", "runs a project");
+    run_step.makeFn = runProject;
+    run_step.dependOn(build_step);
+    b.default_step = run_step;
 }
 
 const template_path = "./template/";
@@ -31,20 +51,75 @@ const default_args = [_][]const u8{};
 pub fn generateProject(self: *std.build.Step, progress: *std.Progress.Node) !void {
     _ = progress;
     _ = self;
+    try copyRecursiveDir(
+        project_res.project_name,
+        try std.fs.cwd().openIterableDir(template_path, std.fs.Dir.OpenDirOptions{}),
+        try std.fs.cwd().makeOpenPath(project_res.path, std.fs.Dir.OpenDirOptions{}),
+    );
+}
+
+pub fn buildProject() *std.Build.Step.Compile {
+    const target = stored_b.standardTargetOptions(.{});
+    const mode = stored_b.standardOptimizeOption(.{});
+
+    var exe = stored_b.addExecutable(.{
+        .name = project_res.project_name,
+        // .root_source_file = .{ .path = "src/main.zig" },
+        .optimize = mode,
+        .target = target,
+    });
+    exe.addCSourceFile(std.Build.Step.Compile.CSourceFile{
+        .file = .{ .path = project_res.cpp_file_path },
+        .flags = &[_][]const u8{ "-O2", "-lm", "-std=c++11" },
+    });
+    exe.linkLibCpp();
+    // exe.out_filename = project_info.exe_file_path;
+    return exe;
+}
+
+pub fn runProject(self: *std.build.Step, progress: *std.Progress.Node) !void {
+    _ = progress;
+    _ = self;
+    _ = try std.ChildProcess.exec(.{
+        .allocator = allocator,
+        .cwd = project_res.path,
+        .argv = &[_][]const u8{project_res.exe_with_extension},
+    });
+}
+
+const ProjectSet = struct {
+    project_path: []const []const u8,
+    project_name: []const u8,
+    path: []const u8,
+    cpp_file_path: []const u8,
+    exe_file_path: []const u8,
+    exe_with_extension: []const u8,
+};
+fn getSetFromArgs() !ProjectSet {
     var args = stored_b.args orelse &default_args;
     if (args.len < 1) {
-        return;
+        return error.NotEnoughArgs;
     }
-    const project_name = args[0 .. args.len - 1];
-    _ = project_name;
-    const last_name = args[args.len - 1];
+    const project_path = args[0 .. args.len - 1];
+    const project_name = args[args.len - 1];
     const path = try std.fs.path.join(allocator, args);
-    // std.debug.print("{s}\n", .{path});
-    try copyRecursiveDir(
-        last_name,
-        try std.fs.cwd().openIterableDir(template_path, std.fs.Dir.OpenDirOptions{}),
-        try std.fs.cwd().makeOpenPath(path, std.fs.Dir.OpenDirOptions{}),
-    );
+    const cpp_name = try std.mem.join(allocator, ".", &[_][]const u8{ project_name, "cpp" });
+    const cpp_file_path = try std.fs.path.join(allocator, &[_][]const u8{ path, cpp_name });
+    var exe_file_path = try std.fs.path.join(allocator, &[_][]const u8{ "../", path });
+    exe_file_path = try std.mem.join(allocator, "", &[_][]const u8{ exe_file_path, "\\" });
+    var exe_with_extension = try std.fs.path.join(allocator, &[_][]const u8{
+        path,
+        project_name,
+    });
+    exe_with_extension = try std.mem.join(allocator, ".", &[_][]const u8{ project_name, "exe" });
+    return ProjectSet{
+        .project_path = project_path,
+        .project_name = project_name,
+        .path = path,
+        .cpp_file_path = cpp_file_path,
+        .exe_file_path = exe_file_path,
+        .exe_with_extension = exe_with_extension,
+    };
 }
 
 fn copyRecursiveDir(project: []const u8, src_dir: std.fs.IterableDir, dest_dir: std.fs.Dir) anyerror!void {
