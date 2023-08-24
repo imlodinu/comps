@@ -61,12 +61,16 @@ int main()
         pair<i64, i64> votes_for_first = *find_if(votes.begin(), votes.end(), [](const pair<i64, i64> &a)
                                                   { return a.first == 1; });
         pair<i64, i64> top_votes = votes[0];
-        if (votes[0].first == 1)
-        {
-            break;
-        }
+        vec<pair<i64, i64>> deals_more_than_first = deals;
+        deals_more_than_first.erase(remove_if(deals_more_than_first.begin(), deals_more_than_first.end(), [&](const pair<i64, i64> &a)
+                                              { return a.second <= votes_for_first.second; }),
+                                    deals_more_than_first.end());
+        sort(deals_more_than_first.begin(), deals_more_than_first.end(), [](const pair<i64, i64> &a, const pair<i64, i64> &b)
+             { return a.second < b.second; });
 
-        i64 value_of_buying_from_current_highest =
+        if (deals_more_than_first.size() == 0)
+        {
+        }
 
     } while (true);
 
